@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestión de Almacén</title>
+  <style>
+    /* ── Variables ── */
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --error: #dc2626;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Config banner ── */
+    #config-banner {
+      background: #fef3c7;
+      border-bottom: 1px solid #fcd34d;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: #92400e;
+      text-align: center;
+    }
+    #config-banner code {
+      background: #fde68a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 20px 32px;
+    }
+    header h1 { font-size: 22px; font-weight: 700; }
+    header p  { font-size: 13px; opacity: .8; margin-top: 4px; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      background: #fff;
+      border-bottom: 2px solid var(--border);
+      padding: 0 32px;
+    }
+    .tab-btn {
+      padding: 14px 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: color .2s, border-color .2s;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* ── Main layout ── */
+    main { max-width: 680px; margin: 32px auto; padding: 0 16px 64px; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .card h2 { font-size: 17px; margin-bottom: 4px; }
+    .card .subtitle { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+
+    /* ── Form elements ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label { font-size: 13px; font-weight: 600; color: var(--text); }
+    label span { color: var(--error); }
+
+    input, select, textarea {
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text);
+      background: #fff;
+      transition: border-color .2s, box-shadow .2s;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    .input-hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── Submit button ── */
+    .btn-submit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      margin-top: 24px;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+    }
+    .btn-submit:hover  { background: var(--primary-dark); }
+    .btn-submit:active { transform: scale(.98); }
+    .btn-submit:disabled { background: var(--muted); cursor: not-allowed; }
+
+    /* ── Feedback ── */
+    .feedback {
+      display: none;
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .feedback.success { background: #dcfce7; color: var(--success); border: 1px solid #86efac; }
+    .feedback.error   { background: #fee2e2; color: var(--error);   border: 1px solid #fca5a5; }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 3px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Tab panels ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 520px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .card { padding: 20px 16px; }
+      header { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     CONFIGURACIÓN: cambia estas URLs por las de tu n8n
+     ══════════════════════════════════════════════════ -->
+<script>
+  // ⚙️  EDITA ESTAS DOS LÍNEAS con las URLs de tu instancia de n8n
+  const N8N_RECEPCION_URL = https://aphyllo.app.n8n.cloud/webhook/Pb-raw-materials;
+  const N8N_SOLICITUD_URL = https://aphyllo.app.n8n.cloud/webhook/raw-materials-issue;
+</script>
+
+<div id="config-banner">
+  ⚙️ Antes de usar, edita las URLs de webhook en el archivo HTML. Busca la sección <code>CONFIGURACIÓN</code>.
+</div>
+
+<header>
+  <h1>Gestión de Almacén</h1>
+  <p>Sistema de recepción y despacho de materiales</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('recepcion', this)">📦 Recepción de Material</button>
+  <button class="tab-btn"        onclick="showTab('solicitud', this)">📋 Solicitud de Despacho</button>
+</div>
+
+<main>
+
+  <!-- ═══════════════════════════════════════
+       FORMULARIO 1: Recepción de Materiales
+       ═══════════════════════════════════════ -->
+  <div id="tab-recepcion" class="tab-panel active">
+    <div class="card">
+      <h2>Recepción de Materia Prima</h2>
+      <p class="subtitle">Registra el ingreso de materiales al almacén.</p>
+
+      <form id="form-recepcion" novalidate>
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label for="r-product-id">ID de Producto <span>*</span></label>
+            <input type="text" id="r-product-id" placeholder="Ej: MP-001" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-material-name">Nombre del Material <span>*</span></label>
+            <input type="text" id="r-material-name" placeholder="Ej: Tubo PVC 3/4'" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-supplier">Proveedor <span>*</span></label>
+            <input type="text" id="r-supplier" placeholder="Nombre del proveedor" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-received-by">Recibido por <span>*</span></label>
+            <input type="text" id="r-received-by" placeholder="Nombre del receptor" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-quantity">Cantidad Recibida <span>*</span></label>
+            <input type="number" id="r-quantity" placeholder="0" min="0.001" step="any" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-unit">Unidad de Medida <span>*</span></label>
+            <select id="r-unit" required>
+              <option value="">Seleccionar…</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="mL">mL</option>
+              <option value="m">m</option>
+              <option value="cm">cm</option>
+              <option value="m²">m²</option>
+              <option value="unidad">unidad</option>
+              <option value="caja">caja</option>
+              <option value="rollo">rollo</option>
+              <option value="bolsa">bolsa</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="r-unit-price">Precio Unitario <span>*</span></label>
+            <input type="number" id="r-unit-price" placeholder="0.00" min="0" step="any" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-delivery-date">Fecha de Entrega <span>*</span></label>
+            <input type="date" id="r-delivery-date" required />
+          </div>
+
+          <div class="form-group full">
+            <label for="r-description">Descripción / Notas</label>
+            <textarea id="r-description" placeholder="Observaciones opcionales sobre la entrega…"></textarea>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-recepcion">
+          <div class="spinner" id="spin-recepcion"></div>
+          <span id="btn-recepcion-text">Registrar Recepción</span>
+        </button>
+      </form>
+
+      <div class="feedback" id="fb-recepcion"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       FORMULARIO 2: Solicitud de Despacho
+       ═══════════════════════════════════════ -->
+  <div id="tab-solicitud" class="tab-panel">
+    <div class="card">
+      <h2>Solicitud de Despacho de Material</h2>
+      <p class="subtitle">Solicita materiales del almacén. La solicitud pasará por aprobación antes de procesarse.</p>
+
+      <form id="form-solicitud" novalidate>
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label for="s-product-id">ID de Producto <span>*</span></label>
+            <input type="text" id="s-product-id" placeholder="Ej: MP-001" required />
+          </div>
+
+          <div class="form-group">
+            <label for="s-requested-by">Solicitado por <span>*</span></label>
+            <input type="text" id="s-requested-by" placeholder="Nombre o área solicitante" required />
+          </div>
+
+          <div class="form-group">
+            <label for="s-quantity">Cantidad Solicitada <span>*</span></label>
+            <input type="number" id="s-quantity" placeholder="0" min="0.001" step="any" required />
+          </div>
+
+          <div class="form-group">
+            <label for="s-unit">Unidad de Medida <span>*</span></label>
+            <select id="s-unit" required>
+              <option value="">Seleccionar…</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="mL">mL</option>
+              <option value="m">m</option>
+              <option value="cm">cm</option>
+              <option value="m²">m²</option>
+              <option value="unidad">unidad</option>
+              <option value="caja">caja</option>
+              <option value="rollo">rollo</option>
+              <option value="bolsa">bolsa</option>
+            </select>
+          </div>
+
+          <div class="form-group full">
+            <label for="s-description">Descripción / Motivo <span>*</span></label>
+            <textarea id="s-description" placeholder="Indica para qué proyecto u obra se utilizará el material…" required></textarea>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-solicitud">
+          <div class="spinner" id="spin-solicitud"></div>
+          <span id="btn-solicitud-text">Enviar Solicitud</span>
+        </button>
+      </form>
+
+      <div class="feedback" id="fb-solicitud"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  /* ── Tab switching ── */
+  function showTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  /* ── UUID generator ── */
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  /* ── Set default date to today ── */
+  document.getElementById('r-delivery-date').value = new Date().toISOString().split('T')[0];
+
+  /* ── Generic submit helper ── */
+  async function submitForm({ payload, url, btnId, spinId, btnTextId, feedbackId, formId }) {
+    const btn      = document.getElementById(btnId);
+    const spin     = document.getElementById(spinId);
+    const btnText  = document.getElementById(btnTextId);
+    const feedback = document.getElementById(feedbackId);
+
+    btn.disabled       = true;
+    spin.style.display = 'block';
+    btnText.textContent = 'Enviando…';
+    feedback.style.display = 'none';
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        feedback.className = 'feedback success';
+        feedback.textContent = '✓ Enviado correctamente. El flujo de n8n fue activado.';
+        document.getElementById(formId).reset();
+        // Reset date after clear
+        if (formId === 'form-recepcion') {
+          document.getElementById('r-delivery-date').value = new Date().toISOString().split('T')[0];
+        }
+      } else {
+        const body = await res.text();
+        throw new Error(`HTTP ${res.status}: ${body.slice(0, 120)}`);
+      }
+    } catch (err) {
+      feedback.className = 'feedback error';
+      feedback.textContent = '✗ Error al enviar: ' + err.message;
+    } finally {
+      btn.disabled        = false;
+      spin.style.display  = 'none';
+      btnText.textContent = btnId === 'btn-recepcion' ? 'Registrar Recepción' : 'Enviar Solicitud';
+      feedback.style.display = 'block';
+    }
+  }
+
+  /* ══════════════════════════════════
+     Formulario 1 – Recepción
+     ══════════════════════════════════ */
+  document.getElementById('form-recepcion').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    if (!f.checkValidity()) { f.reportValidity(); return; }
+
+    const qty   = parseFloat(document.getElementById('r-quantity').value);
+    const price = parseFloat(document.getElementById('r-unit-price').value);
+
+    await submitForm({
+      url: N8N_RECEPCION_URL,
+      formId: 'form-recepcion',
+      btnId: 'btn-recepcion',
+      spinId: 'spin-recepcion',
+      btnTextId: 'btn-recepcion-text',
+      feedbackId: 'fb-recepcion',
+      payload: {
+        timestamp:        new Date().toISOString(),
+        product_id:       document.getElementById('r-product-id').value.trim(),
+        material_name:    document.getElementById('r-material-name').value.trim(),
+        supplier_name:    document.getElementById('r-supplier').value.trim(),
+        received_by:      document.getElementById('r-received-by').value.trim(),
+        quantity_received: qty,
+        measurement_unit: document.getElementById('r-unit').value,
+        unit_price:       price,
+        total_price:      (qty * price).toFixed(2),
+        date_of_delivery: document.getElementById('r-delivery-date').value,
+        description:      document.getElementById('r-description').value.trim(),
+        submissionId:     uuid()
+      }
+    });
+  });
+
+  /* ══════════════════════════════════
+     Formulario 2 – Solicitud de Despacho
+     ══════════════════════════════════ */
+  document.getElementById('form-solicitud').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    if (!f.checkValidity()) { f.reportValidity(); return; }
+
+    await submitForm({
+      url: N8N_SOLICITUD_URL,
+      formId: 'form-solicitud',
+      btnId: 'btn-solicitud',
+      spinId: 'spin-solicitud',
+      btnTextId: 'btn-solicitud-text',
+      feedbackId: 'fb-solicitud',
+      payload: {
+        "Product ID":          document.getElementById('s-product-id').value.trim(),
+        "Quantity Requested":  parseFloat(document.getElementById('s-quantity').value),
+        "Requested By":        document.getElementById('s-requested-by').value.trim(),
+        "Measurement Unit":    document.getElementById('s-unit').value,
+        "Description":         document.getElementById('s-description').value.trim(),
+        "Submission ID":       uuid()
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
