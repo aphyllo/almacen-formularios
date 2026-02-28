@@ -171,6 +171,20 @@
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
+    /* ── Cantidad insuficiente ── */
+    .qty-error {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--error);
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-top: 4px;
+      display: none;
+    }
+    .qty-error.visible { display: block; }
+
     /* ── Responsive ── */
     @media (max-width: 520px) {
       .form-grid { grid-template-columns: 1fr; }
@@ -314,6 +328,7 @@
           <div class="form-group">
             <label for="s-quantity">Cantidad Solicitada <span>*</span></label>
             <input type="number" id="s-quantity" placeholder="0" min="0.001" step="any" required />
+            <p class="qty-error" id="s-qty-error"></p>
           </div>
 
           <div class="form-group full">
@@ -431,6 +446,33 @@
   }
 
   /* ══════════════════════════════════
+     Validación de stock en tiempo real
+     ══════════════════════════════════ */
+  function validateQuantity() {
+    const select   = document.getElementById('s-product-id');
+    const qtyInput = document.getElementById('s-quantity');
+    const qtyError = document.getElementById('s-qty-error');
+    const opt      = select.options[select.selectedIndex];
+    const stock    = parseFloat(opt?.dataset?.stock);
+    const qty      = parseFloat(qtyInput.value);
+
+    if (select.value && !isNaN(qty) && qty > 0 && !isNaN(stock) && qty > stock) {
+      const unit = opt.dataset.unit || '';
+      qtyError.textContent = `⛔ CANTIDAD INSUFICIENTE — Stock disponible: ${stock} ${unit}`;
+      qtyError.classList.add('visible');
+      qtyInput.style.borderColor = 'var(--error)';
+      qtyInput.style.boxShadow   = '0 0 0 3px rgba(220,38,38,.15)';
+      return false;
+    }
+    qtyError.classList.remove('visible');
+    qtyInput.style.borderColor = '';
+    qtyInput.style.boxShadow   = '';
+    return true;
+  }
+
+  document.getElementById('s-quantity').addEventListener('input',  validateQuantity);
+
+  /* ══════════════════════════════════
      Auto-rellenar al seleccionar producto
      ══════════════════════════════════ */
   document.getElementById('s-product-id').addEventListener('change', function () {
@@ -454,6 +496,9 @@
         unitSelect.value = unit;
       }
     }
+
+    // Re-validar cantidad al cambiar producto
+    validateQuantity();
 
     // Mostrar stock disponible
     if (this.value && !isNaN(stock)) {
@@ -565,6 +610,7 @@
   document.getElementById('form-solicitud').addEventListener('submit', async e => {
     e.preventDefault();
     if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
+    if (!validateQuantity()) return; // bloquear si stock insuficiente
 
     await submitForm({
       url:       N8N_SOLICITUD_URL,
