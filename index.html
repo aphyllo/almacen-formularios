@@ -11,6 +11,7 @@
       --primary-dark: #1d4ed8;
       --success: #16a34a;
       --error: #dc2626;
+      --warning: #d97706;
       --bg: #f1f5f9;
       --card: #ffffff;
       --border: #e2e8f0;
@@ -26,22 +27,6 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-    }
-
-    /* ── Config banner ── */
-    #config-banner {
-      background: #fef3c7;
-      border-bottom: 1px solid #fcd34d;
-      padding: 10px 20px;
-      font-size: 13px;
-      color: #92400e;
-      text-align: center;
-    }
-    #config-banner code {
-      background: #fde68a;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: monospace;
     }
 
     /* ── Header ── */
@@ -120,10 +105,21 @@
       box-shadow: 0 0 0 3px rgba(37,99,235,.15);
     }
     textarea { resize: vertical; min-height: 80px; }
+
+    /* ── Hints e indicadores de stock ── */
     .input-hint {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--muted);
       margin-top: 2px;
+      min-height: 18px;
+    }
+    .stock-ok  { color: var(--success); font-weight: 600; }
+    .stock-low { color: var(--error);   font-weight: 600; }
+
+    /* ── Dropdown en estado carga ── */
+    select.loading {
+      color: var(--muted);
+      font-style: italic;
     }
 
     /* ── Submit button ── */
@@ -186,17 +182,17 @@
 <body>
 
 <!-- ══════════════════════════════════════════════════
-     CONFIGURACIÓN: cambia estas URLs por las de tu n8n
+     CONFIGURACIÓN: edita estas variables con tus datos
      ══════════════════════════════════════════════════ -->
 <script>
-  // ⚙️  EDITA ESTAS DOS LÍNEAS con las URLs de tu instancia de n8n
+  // ⚙️ URLs de webhooks n8n
   const N8N_RECEPCION_URL = "https://aphyllo.app.n8n.cloud/webhook/Pb-raw-materials";
   const N8N_SOLICITUD_URL = "https://aphyllo.app.n8n.cloud/webhook/raw-materials-issue";
-</script>
 
-<div id="config-banner">
-  ⚙️ Antes de usar, edita las URLs de webhook en el archivo HTML. Busca la sección <code>CONFIGURACIÓN</code>.
-</div>
+  // ⚙️ Supabase (para cargar lista de productos en el formulario de Solicitud)
+  const SUPABASE_URL      = "https://clkagukmqejllwxlivrv.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_O4v2_czcHQoXqga51AL8Ow_vm0QJVaW";
+</script>
 
 <header>
   <h1>Gestión de Almacén</h1>
@@ -302,9 +298,12 @@
       <form id="form-solicitud" novalidate>
         <div class="form-grid">
 
-          <div class="form-group">
-            <label for="s-product-id">ID de Producto <span>*</span></label>
-            <input type="text" id="s-product-id" placeholder="Ej: MP-001" required />
+          <div class="form-group full">
+            <label for="s-product-id">Producto <span>*</span></label>
+            <select id="s-product-id" class="loading" required>
+              <option value="">⏳ Cargando productos…</option>
+            </select>
+            <p class="input-hint" id="s-stock-info"></p>
           </div>
 
           <div class="form-group">
@@ -317,7 +316,7 @@
             <input type="number" id="s-quantity" placeholder="0" min="0.001" step="any" required />
           </div>
 
-          <div class="form-group">
+          <div class="form-group full">
             <label for="s-unit">Unidad de Medida <span>*</span></label>
             <select id="s-unit" required>
               <option value="">Seleccionar…</option>
@@ -333,6 +332,7 @@
               <option value="rollo">rollo</option>
               <option value="bolsa">bolsa</option>
             </select>
+            <p class="input-hint">Se rellena automáticamente al seleccionar el producto.</p>
           </div>
 
           <div class="form-group full">
@@ -355,15 +355,21 @@
 </main>
 
 <script>
-  /* ── Tab switching ── */
+  /* ══════════════════════════════════
+     Tab switching
+     ══════════════════════════════════ */
   function showTab(name, btn) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + name).classList.add('active');
     btn.classList.add('active');
+    // Cargar productos al abrir Solicitud
+    if (name === 'solicitud') loadProducts();
   }
 
-  /* ── UUID generator ── */
+  /* ══════════════════════════════════
+     UUID generator
+     ══════════════════════════════════ */
   function uuid() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = Math.random() * 16 | 0;
@@ -371,47 +377,149 @@
     });
   }
 
-  /* ── Set default date to today ── */
+  /* ══════════════════════════════════
+     Cargar productos desde Supabase
+     ══════════════════════════════════ */
+  async function loadProducts() {
+    const select = document.getElementById('s-product-id');
+    const info   = document.getElementById('s-stock-info');
+
+    select.className = 'loading';
+    select.innerHTML = '<option value="">⏳ Cargando productos…</option>';
+    info.textContent = '';
+
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/Current%20Stock?select=*&order=Product%20ID`,
+        {
+          headers: {
+            'apikey':        SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const products = await res.json();
+
+      if (!Array.isArray(products) || products.length === 0) {
+        select.innerHTML = '<option value="">⚠️ No hay productos registrados</option>';
+        select.className = '';
+        return;
+      }
+
+      select.innerHTML = '<option value="">Seleccionar producto…</option>';
+      products.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value             = p['Product ID'];
+        opt.textContent       = `${p['Product ID']} — ${p['Material Name']}`;
+        opt.dataset.unit      = p['Measurement Unit']   || '';
+        opt.dataset.stock     = p['Current Stock']      ?? '';
+        opt.dataset.min       = p['Minimum Stock Level']?? '';
+        opt.dataset.material  = p['Material Name']      || '';
+        select.appendChild(opt);
+      });
+      select.className = '';
+
+    } catch (err) {
+      select.innerHTML = '<option value="">❌ Error al cargar — actualiza la página</option>';
+      select.className = '';
+      info.className   = 'input-hint stock-low';
+      info.textContent = 'No se pudo conectar con Supabase: ' + err.message;
+    }
+  }
+
+  /* ══════════════════════════════════
+     Auto-rellenar al seleccionar producto
+     ══════════════════════════════════ */
+  document.getElementById('s-product-id').addEventListener('change', function () {
+    const opt   = this.options[this.selectedIndex];
+    const info  = document.getElementById('s-stock-info');
+    const unit  = opt.dataset.unit  || '';
+    const stock = parseFloat(opt.dataset.stock);
+    const min   = parseFloat(opt.dataset.min);
+
+    // Auto-rellenar unidad de medida
+    const unitSelect = document.getElementById('s-unit');
+    if (unit) {
+      // Buscar si existe la opción, si no agregarla temporalmente
+      let found = false;
+      for (const o of unitSelect.options) {
+        if (o.value === unit) { unitSelect.value = unit; found = true; break; }
+      }
+      if (!found) {
+        const newOpt = new Option(unit, unit);
+        unitSelect.add(newOpt);
+        unitSelect.value = unit;
+      }
+    }
+
+    // Mostrar stock disponible
+    if (this.value && !isNaN(stock)) {
+      const isLow = !isNaN(min) && stock <= min;
+      info.className   = 'input-hint ' + (isLow ? 'stock-low' : 'stock-ok');
+      info.textContent = isLow
+        ? `⚠️ Stock bajo: ${stock} ${unit} disponibles (mínimo: ${min} ${unit})`
+        : `✓ Stock disponible: ${stock} ${unit}`;
+    } else {
+      info.className   = 'input-hint';
+      info.textContent = '';
+    }
+  });
+
+  /* ══════════════════════════════════
+     Fecha por defecto = hoy
+     ══════════════════════════════════ */
   document.getElementById('r-delivery-date').value = new Date().toISOString().split('T')[0];
 
-  /* ── Generic submit helper ── */
-  async function submitForm({ payload, url, btnId, spinId, btnTextId, feedbackId, formId }) {
+  /* ══════════════════════════════════
+     Helper genérico de envío
+     ══════════════════════════════════ */
+  async function submitForm({ payload, url, btnId, spinId, btnTextId, feedbackId, formId, btnLabel }) {
     const btn      = document.getElementById(btnId);
     const spin     = document.getElementById(spinId);
     const btnText  = document.getElementById(btnTextId);
     const feedback = document.getElementById(feedbackId);
 
-    btn.disabled       = true;
-    spin.style.display = 'block';
-    btnText.textContent = 'Enviando…';
-    feedback.style.display = 'none';
+    btn.disabled            = true;
+    spin.style.display      = 'block';
+    btnText.textContent     = 'Enviando…';
+    feedback.style.display  = 'none';
 
     try {
       const res = await fetch(url, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body:    JSON.stringify(payload)
       });
 
       if (res.ok) {
-        feedback.className = 'feedback success';
+        feedback.className   = 'feedback success';
         feedback.textContent = '✓ Enviado correctamente. El flujo de n8n fue activado.';
         document.getElementById(formId).reset();
-        // Reset date after clear
+        document.getElementById('s-stock-info').textContent = '';
         if (formId === 'form-recepcion') {
           document.getElementById('r-delivery-date').value = new Date().toISOString().split('T')[0];
         }
       } else {
-        const body = await res.text();
-        throw new Error(`HTTP ${res.status}: ${body.slice(0, 120)}`);
+        let errorDetail = '';
+        try {
+          const body = await res.json();
+          errorDetail = body.message || body.error || JSON.stringify(body);
+        } catch {
+          errorDetail = await res.text();
+        }
+        throw new Error(`HTTP ${res.status}: ${errorDetail}`);
       }
+
     } catch (err) {
-      feedback.className = 'feedback error';
+      feedback.className   = 'feedback error';
       feedback.textContent = '✗ Error al enviar: ' + err.message;
     } finally {
-      btn.disabled        = false;
-      spin.style.display  = 'none';
-      btnText.textContent = btnId === 'btn-recepcion' ? 'Registrar Recepción' : 'Enviar Solicitud';
+      btn.disabled           = false;
+      spin.style.display     = 'none';
+      btnText.textContent    = btnLabel;
       feedback.style.display = 'block';
     }
   }
@@ -421,32 +529,32 @@
      ══════════════════════════════════ */
   document.getElementById('form-recepcion').addEventListener('submit', async e => {
     e.preventDefault();
-    const f = e.target;
-    if (!f.checkValidity()) { f.reportValidity(); return; }
+    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
 
     const qty   = parseFloat(document.getElementById('r-quantity').value);
     const price = parseFloat(document.getElementById('r-unit-price').value);
 
     await submitForm({
-      url: N8N_RECEPCION_URL,
-      formId: 'form-recepcion',
-      btnId: 'btn-recepcion',
-      spinId: 'spin-recepcion',
+      url:       N8N_RECEPCION_URL,
+      formId:    'form-recepcion',
+      btnId:     'btn-recepcion',
+      spinId:    'spin-recepcion',
       btnTextId: 'btn-recepcion-text',
-      feedbackId: 'fb-recepcion',
+      feedbackId:'fb-recepcion',
+      btnLabel:  'Registrar Recepción',
       payload: {
-        timestamp:        new Date().toISOString(),
-        product_id:       document.getElementById('r-product-id').value.trim(),
-        material_name:    document.getElementById('r-material-name').value.trim(),
-        supplier_name:    document.getElementById('r-supplier').value.trim(),
-        received_by:      document.getElementById('r-received-by').value.trim(),
+        timestamp:         new Date().toISOString(),
+        product_id:        document.getElementById('r-product-id').value.trim(),
+        material_name:     document.getElementById('r-material-name').value.trim(),
+        supplier_name:     document.getElementById('r-supplier').value.trim(),
+        received_by:       document.getElementById('r-received-by').value.trim(),
         quantity_received: qty,
-        measurement_unit: document.getElementById('r-unit').value,
-        unit_price:       price,
-        total_price:      (qty * price).toFixed(2),
-        date_of_delivery: document.getElementById('r-delivery-date').value,
-        description:      document.getElementById('r-description').value.trim(),
-        submissionId:     uuid()
+        measurement_unit:  document.getElementById('r-unit').value,
+        unit_price:        price,
+        total_price:       (qty * price).toFixed(2),
+        date_of_delivery:  document.getElementById('r-delivery-date').value,
+        description:       document.getElementById('r-description').value.trim(),
+        submissionId:      uuid()
       }
     });
   });
@@ -456,25 +564,28 @@
      ══════════════════════════════════ */
   document.getElementById('form-solicitud').addEventListener('submit', async e => {
     e.preventDefault();
-    const f = e.target;
-    if (!f.checkValidity()) { f.reportValidity(); return; }
+    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
 
     await submitForm({
-      url: N8N_SOLICITUD_URL,
-      formId: 'form-solicitud',
-      btnId: 'btn-solicitud',
-      spinId: 'spin-solicitud',
+      url:       N8N_SOLICITUD_URL,
+      formId:    'form-solicitud',
+      btnId:     'btn-solicitud',
+      spinId:    'spin-solicitud',
       btnTextId: 'btn-solicitud-text',
-      feedbackId: 'fb-solicitud',
+      feedbackId:'fb-solicitud',
+      btnLabel:  'Enviar Solicitud',
       payload: {
-        "Product ID":          document.getElementById('s-product-id').value.trim(),
-        "Quantity Requested":  parseFloat(document.getElementById('s-quantity').value),
-        "Requested By":        document.getElementById('s-requested-by').value.trim(),
-        "Measurement Unit":    document.getElementById('s-unit').value,
-        "Description":         document.getElementById('s-description').value.trim(),
-        "Submission ID":       uuid()
+        'Product ID':         document.getElementById('s-product-id').value.trim(),
+        'Quantity Requested': parseFloat(document.getElementById('s-quantity').value),
+        'Requested By':       document.getElementById('s-requested-by').value.trim(),
+        'Measurement Unit':   document.getElementById('s-unit').value,
+        'Description':        document.getElementById('s-description').value.trim(),
+        'Submission ID':      uuid()
       }
     });
+
+    // Recargar productos para que el stock se actualice tras enviar
+    loadProducts();
   });
 </script>
 
