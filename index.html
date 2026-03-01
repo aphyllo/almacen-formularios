@@ -326,6 +326,11 @@
           </div>
 
           <div class="form-group">
+            <label for="s-requester-email">Email del Solicitante <span>*</span></label>
+            <input type="email" id="s-requester-email" placeholder="tu@email.com" required />
+          </div>
+
+          <div class="form-group">
             <label for="s-quantity">Cantidad Solicitada <span>*</span></label>
             <input type="number" id="s-quantity" placeholder="0" min="0.001" step="any" required />
             <p class="qty-error" id="s-qty-error"></p>
@@ -624,6 +629,7 @@
         'Product ID':         document.getElementById('s-product-id').value.trim(),
         'Quantity Requested': parseFloat(document.getElementById('s-quantity').value),
         'Requested By':       document.getElementById('s-requested-by').value.trim(),
+        'Requester Email':    document.getElementById('s-requester-email').value.trim(),
         'Measurement Unit':   document.getElementById('s-unit').value,
         'Description':        document.getElementById('s-description').value.trim(),
         'Submission ID':      uuid()
