@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestión de Almacén</title>
+  <style>
+    /* ── Variables ── */
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --error: #dc2626;
+      --warning: #d97706;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 20px 32px;
+    }
+    header h1 { font-size: 22px; font-weight: 700; }
+    header p  { font-size: 13px; opacity: .8; margin-top: 4px; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      background: #fff;
+      border-bottom: 2px solid var(--border);
+      padding: 0 32px;
+    }
+    .tab-btn {
+      padding: 14px 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: color .2s, border-color .2s;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* ── Main layout ── */
+    main { max-width: 680px; margin: 32px auto; padding: 0 16px 64px; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .card h2 { font-size: 17px; margin-bottom: 4px; }
+    .card .subtitle { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+
+    /* ── Form elements ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label { font-size: 13px; font-weight: 600; color: var(--text); }
+    label span { color: var(--error); }
+
+    input, select, textarea {
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text);
+      background: #fff;
+      transition: border-color .2s, box-shadow .2s;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* ── Hints e indicadores de stock ── */
+    .input-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      min-height: 18px;
+    }
+    .stock-ok  { color: var(--success); font-weight: 600; }
+    .stock-low { color: var(--error);   font-weight: 600; }
+
+    /* ── Dropdown en estado carga ── */
+    select.loading {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Submit button ── */
+    .btn-submit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      margin-top: 24px;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+    }
+    .btn-submit:hover  { background: var(--primary-dark); }
+    .btn-submit:active { transform: scale(.98); }
+    .btn-submit:disabled { background: var(--muted); cursor: not-allowed; }
+
+    /* ── Feedback ── */
+    .feedback {
+      display: none;
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .feedback.success { background: #dcfce7; color: var(--success); border: 1px solid #86efac; }
+    .feedback.error   { background: #fee2e2; color: var(--error);   border: 1px solid #fca5a5; }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 3px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Tab panels ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Cantidad insuficiente ── */
+    .qty-error {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--error);
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-top: 4px;
+      display: none;
+    }
+    .qty-error.visible { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 520px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .card { padding: 20px 16px; }
+      header { padding: 16px; }
+    }
+
+    /* ── Login overlay ── */
+    #login-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #login-overlay.hidden { display: none; }
+
+    .login-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.10);
+    }
+    .login-logo { text-align: center; margin-bottom: 28px; }
+    .login-logo h2 { font-size: 20px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .login-logo p  { font-size: 13px; color: var(--muted); }
+    .login-card .form-group { margin-bottom: 16px; }
+    .login-card label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 5px; }
+    .login-error {
+      font-size: 13px;
+      color: var(--error);
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .login-error.visible { display: block; }
+
+    /* ── Header user info ── */
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 13px;
+      opacity: .9;
+    }
+    .btn-logout {
+      background: rgba(255,255,255,.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-logout:hover { background: rgba(255,255,255,.25); }
+  </style>
+  <!-- Supabase JS v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     CONFIGURACIÓN: edita estas variables con tus datos
+     ══════════════════════════════════════════════════ -->
+<script>
+  // ⚙️ URLs de webhooks n8n
+  const N8N_RECEPCION_URL = "https://aphyllo.app.n8n.cloud/webhook/Pb-raw-materials";
+  const N8N_SOLICITUD_URL = "https://aphyllo.app.n8n.cloud/webhook/raw-materials-issue";
+
+  // ⚙️ Supabase (para cargar lista de productos en el formulario de Solicitud)
+  const SUPABASE_URL      = "https://clkagukmqejllwxlivrv.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_O4v2_czcHQoXqga51AL8Ow_vm0QJVaW";
+
+  // ⚙️ Dominio interno usado para el login (no se muestra al usuario)
+  //    Al crear operarios en Supabase, usa: nombreusuario@almacen.interno
+  const AUTH_EMAIL_DOMAIN = "@almacen.interno";
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     PANTALLA DE LOGIN
+     ══════════════════════════════════════════════════ -->
+<div id="login-overlay">
+  <div class="login-card">
+    <div class="login-logo">
+      <h2>Gestión de Almacén</h2>
+      <p>Ingresa tus credenciales para continuar</p>
+    </div>
+    <div class="login-error" id="login-error"></div>
+    <div class="form-group">
+      <label for="login-username">Usuario</label>
+      <input type="text" id="login-username" placeholder="Ej: operario1" autocomplete="username" />
+    </div>
+    <div class="form-group">
+      <label for="login-password">Contraseña</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button class="btn-submit" id="btn-login" type="button">
+      <div class="spinner" id="spin-login"></div>
+      <span id="btn-login-text">Ingresar</span>
+    </button>
+  </div>
+</div>
+
+<header>
+  <h1>Gestión de Almacén</h1>
+  <p>Sistema de recepción y despacho de materiales</p>
+  <div class="header-user" id="header-user" style="display:none">
+    <span id="header-username"></span>
+    <button class="btn-logout" id="btn-logout">Cerrar sesión</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('recepcion', this)">📦 Recepción de Material</button>
+  <button class="tab-btn"        onclick="showTab('solicitud', this)">📋 Solicitud de Despacho</button>
+</div>
+
+<main>
+
+  <!-- ═══════════════════════════════════════
+       FORMULARIO 1: Recepción de Materiales
+       ═══════════════════════════════════════ -->
+  <div id="tab-recepcion" class="tab-panel active">
+    <div class="card">
+      <h2>Recepción de Materia Prima</h2>
+      <p class="subtitle">Registra el ingreso de materiales al almacén.</p>
+
+      <form id="form-recepcion" novalidate>
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label for="r-product-id">ID de Producto <span>*</span></label>
+            <input type="text" id="r-product-id" placeholder="Ej: MP-001" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-material-name">Nombre del Material <span>*</span></label>
+            <input type="text" id="r-material-name" placeholder="Ej: Tubo PVC 3/4'" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-supplier">Proveedor <span>*</span></label>
+            <input type="text" id="r-supplier" placeholder="Nombre del proveedor" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-received-by">Recibido por <span>*</span></label>
+            <input type="text" id="r-received-by" placeholder="Nombre del receptor" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-quantity">Cantidad Recibida <span>*</span></label>
+            <input type="number" id="r-quantity" placeholder="0" min="0.001" step="any" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-unit">Unidad de Medida <span>*</span></label>
+            <select id="r-unit" required>
+              <option value="">Seleccionar…</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="mL">mL</option>
+              <option value="m">m</option>
+              <option value="cm">cm</option>
+              <option value="m²">m²</option>
+              <option value="unidad">unidad</option>
+              <option value="caja">caja</option>
+              <option value="rollo">rollo</option>
+              <option value="bolsa">bolsa</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="r-unit-price">Precio Unitario <span>*</span></label>
+            <input type="number" id="r-unit-price" placeholder="0.00" min="0" step="any" required />
+          </div>
+
+          <div class="form-group">
+            <label for="r-delivery-date">Fecha de Entrega <span>*</span></label>
+            <input type="date" id="r-delivery-date" required />
+          </div>
+
+          <div class="form-group full">
+            <label for="r-description">Descripción / Notas</label>
+            <textarea id="r-description" placeholder="Observaciones opcionales sobre la entrega…"></textarea>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-recepcion">
+          <div class="spinner" id="spin-recepcion"></div>
+          <span id="btn-recepcion-text">Registrar Recepción</span>
+        </button>
+      </form>
+
+      <div class="feedback" id="fb-recepcion"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       FORMULARIO 2: Solicitud de Despacho
+       ═══════════════════════════════════════ -->
+  <div id="tab-solicitud" class="tab-panel">
+    <div class="card">
+      <h2>Solicitud de Despacho de Material</h2>
+      <p class="subtitle">Solicita materiales del almacén. La solicitud pasará por aprobación antes de procesarse.</p>
+
+      <form id="form-solicitud" novalidate>
+        <div class="form-grid">
+
+          <div class="form-group full">
+            <label for="s-product-id">Producto <span>*</span></label>
+            <select id="s-product-id" class="loading" required>
+              <option value="">⏳ Cargando productos…</option>
+            </select>
+            <p class="input-hint" id="s-stock-info"></p>
+          </div>
+
+          <div class="form-group">
+            <label for="s-requested-by">Solicitado por <span>*</span></label>
+            <input type="text" id="s-requested-by" placeholder="Nombre o área solicitante" required />
+          </div>
+
+          <div class="form-group">
+            <label for="s-requester-email">Email del Solicitante <span>*</span></label>
+            <input type="email" id="s-requester-email" placeholder="tu@email.com" required />
+          </div>
+
+          <div class="form-group">
+            <label for="s-quantity">Cantidad Solicitada <span>*</span></label>
+            <input type="number" id="s-quantity" placeholder="0" min="0.001" step="any" required />
+            <p class="qty-error" id="s-qty-error"></p>
+          </div>
+
+          <div class="form-group full">
+            <label for="s-unit">Unidad de Medida <span>*</span></label>
+            <select id="s-unit" required>
+              <option value="">Seleccionar…</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="mL">mL</option>
+              <option value="m">m</option>
+              <option value="cm">cm</option>
+              <option value="m²">m²</option>
+              <option value="unidad">unidad</option>
+              <option value="caja">caja</option>
+              <option value="rollo">rollo</option>
+              <option value="bolsa">bolsa</option>
+            </select>
+            <p class="input-hint">Se rellena automáticamente al seleccionar el producto.</p>
+          </div>
+
+          <div class="form-group full">
+            <label for="s-description">Descripción / Motivo <span>*</span></label>
+            <textarea id="s-description" placeholder="Indica para qué proyecto u obra se utilizará el material…" required></textarea>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-solicitud">
+          <div class="spinner" id="spin-solicitud"></div>
+          <span id="btn-solicitud-text">Enviar Solicitud</span>
+        </button>
+      </form>
+
+      <div class="feedback" id="fb-solicitud"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  /* ══════════════════════════════════
+     Autenticación con Supabase
+     ══════════════════════════════════ */
+  const { createClient } = supabase;
+  const sbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function showApp(user) {
+    document.getElementById('login-overlay').classList.add('hidden');
+    const username = user.email.replace(AUTH_EMAIL_DOMAIN, '');
+    document.getElementById('header-username').textContent = '👤 ' + username;
+    document.getElementById('header-user').style.display = 'flex';
+  }
+
+  function showLogin() {
+    document.getElementById('login-overlay').classList.remove('hidden');
+    document.getElementById('header-user').style.display = 'none';
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').classList.remove('visible');
+  }
+
+  // Verificar sesión existente al cargar la página
+  (async () => {
+    const { data: { session } } = await sbClient.auth.getSession();
+    if (session) showApp(session.user);
+  })();
+
+  // Reaccionar a cambios de sesión (login / logout)
+  sbClient.auth.onAuthStateChange((_event, session) => {
+    if (session) showApp(session.user);
+    else showLogin();
+  });
+
+  async function doLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errorEl  = document.getElementById('login-error');
+    const btn      = document.getElementById('btn-login');
+    const spin     = document.getElementById('spin-login');
+    const btnText  = document.getElementById('btn-login-text');
+
+    if (!username || !password) {
+      errorEl.textContent = 'Por favor ingresa usuario y contraseña.';
+      errorEl.classList.add('visible');
+      return;
+    }
+
+    btn.disabled        = true;
+    spin.style.display  = 'block';
+    btnText.textContent = 'Ingresando…';
+    errorEl.classList.remove('visible');
+
+    const { error } = await sbClient.auth.signInWithPassword({
+      email:    username + AUTH_EMAIL_DOMAIN,
+      password: password
+    });
+
+    btn.disabled        = false;
+    spin.style.display  = 'none';
+    btnText.textContent = 'Ingresar';
+
+    if (error) {
+      errorEl.textContent = 'Usuario o contraseña incorrectos.';
+      errorEl.classList.add('visible');
+    }
+  }
+
+  document.getElementById('btn-login').addEventListener('click', doLogin);
+  document.getElementById('btn-logout').addEventListener('click', () => sbClient.auth.signOut());
+
+  // Navegar con Enter en el formulario de login
+  document.getElementById('login-username').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('login-password').focus();
+  });
+  document.getElementById('login-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  /* ══════════════════════════════════
+     Tab switching
+     ══════════════════════════════════ */
+  function showTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    // Cargar productos al abrir Solicitud
+    if (name === 'solicitud') loadProducts();
+  }
+
+  /* ══════════════════════════════════
+     UUID generator
+     ══════════════════════════════════ */
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  /* ══════════════════════════════════
+     Cargar productos desde Supabase
+     ══════════════════════════════════ */
+  async function loadProducts() {
+    const select = document.getElementById('s-product-id');
+    const info   = document.getElementById('s-stock-info');
+
+    select.className = 'loading';
+    select.innerHTML = '<option value="">⏳ Cargando productos…</option>';
+    info.textContent = '';
+
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/Current%20Stock?select=*&order=Product%20ID`,
+        {
+          headers: {
+            'apikey':        SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const products = await res.json();
+
+      if (!Array.isArray(products) || products.length === 0) {
+        select.innerHTML = '<option value="">⚠️ No hay productos registrados</option>';
+        select.className = '';
+        return;
+      }
+
+      select.innerHTML = '<option value="">Seleccionar producto…</option>';
+      products.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value             = p['Product ID'];
+        opt.textContent       = `${p['Product ID']} — ${p['Material Name']}`;
+        opt.dataset.unit      = p['Measurement Unit']   || '';
+        opt.dataset.stock     = p['Current Stock']      ?? '';
+        opt.dataset.min       = p['Minimum Stock Level']?? '';
+        opt.dataset.material  = p['Material Name']      || '';
+        select.appendChild(opt);
+      });
+      select.className = '';
+
+    } catch (err) {
+      select.innerHTML = '<option value="">❌ Error al cargar — actualiza la página</option>';
+      select.className = '';
+      info.className   = 'input-hint stock-low';
+      info.textContent = 'No se pudo conectar con Supabase: ' + err.message;
+    }
+  }
+
+  /* ══════════════════════════════════
+     Validación de stock en tiempo real
+     ══════════════════════════════════ */
+  function validateQuantity() {
+    const select   = document.getElementById('s-product-id');
+    const qtyInput = document.getElementById('s-quantity');
+    const qtyError = document.getElementById('s-qty-error');
+    const opt      = select.options[select.selectedIndex];
+    const stock    = parseFloat(opt?.dataset?.stock);
+    const qty      = parseFloat(qtyInput.value);
+
+    if (select.value && !isNaN(qty) && qty > 0 && !isNaN(stock) && qty > stock) {
+      const unit = opt.dataset.unit || '';
+      qtyError.textContent = `⛔ CANTIDAD INSUFICIENTE — Stock disponible: ${stock} ${unit}`;
+      qtyError.classList.add('visible');
+      qtyInput.style.borderColor = 'var(--error)';
+      qtyInput.style.boxShadow   = '0 0 0 3px rgba(220,38,38,.15)';
+      return false;
+    }
+    qtyError.classList.remove('visible');
+    qtyInput.style.borderColor = '';
+    qtyInput.style.boxShadow   = '';
+    return true;
+  }
+
+  document.getElementById('s-quantity').addEventListener('input',  validateQuantity);
+
+  /* ══════════════════════════════════
+     Auto-rellenar al seleccionar producto
+     ══════════════════════════════════ */
+  document.getElementById('s-product-id').addEventListener('change', function () {
+    const opt   = this.options[this.selectedIndex];
+    const info  = document.getElementById('s-stock-info');
+    const unit  = opt.dataset.unit  || '';
+    const stock = parseFloat(opt.dataset.stock);
+    const min   = parseFloat(opt.dataset.min);
+
+    // Auto-rellenar unidad de medida
+    const unitSelect = document.getElementById('s-unit');
+    if (unit) {
+      // Buscar si existe la opción, si no agregarla temporalmente
+      let found = false;
+      for (const o of unitSelect.options) {
+        if (o.value === unit) { unitSelect.value = unit; found = true; break; }
+      }
+      if (!found) {
+        const newOpt = new Option(unit, unit);
+        unitSelect.add(newOpt);
+        unitSelect.value = unit;
+      }
+    }
+
+    // Re-validar cantidad al cambiar producto
+    validateQuantity();
+
+    // Mostrar stock disponible
+    if (this.value && !isNaN(stock)) {
+      const isLow = !isNaN(min) && stock <= min;
+      info.className   = 'input-hint ' + (isLow ? 'stock-low' : 'stock-ok');
+      info.textContent = isLow
+        ? `⚠️ Stock bajo: ${stock} ${unit} disponibles (mínimo: ${min} ${unit})`
+        : `✓ Stock disponible: ${stock} ${unit}`;
+    } else {
+      info.className   = 'input-hint';
+      info.textContent = '';
+    }
+  });
+
+  /* ══════════════════════════════════
+     Fecha por defecto = hoy
+     ══════════════════════════════════ */
+  document.getElementById('r-delivery-date').value = new Date().toISOString().split('T')[0];
+
+  /* ══════════════════════════════════
+     Helper genérico de envío
+     ══════════════════════════════════ */
+  async function submitForm({ payload, url, btnId, spinId, btnTextId, feedbackId, formId, btnLabel }) {
+    const btn      = document.getElementById(btnId);
+    const spin     = document.getElementById(spinId);
+    const btnText  = document.getElementById(btnTextId);
+    const feedback = document.getElementById(feedbackId);
+
+    btn.disabled            = true;
+    spin.style.display      = 'block';
+    btnText.textContent     = 'Enviando…';
+    feedback.style.display  = 'none';
+
+    try {
+      const res = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        feedback.className   = 'feedback success';
+        feedback.textContent = '✓ Enviado correctamente. El flujo de n8n fue activado.';
+        document.getElementById(formId).reset();
+        document.getElementById('s-stock-info').textContent = '';
+        if (formId === 'form-recepcion') {
+          document.getElementById('r-delivery-date').value = new Date().toISOString().split('T')[0];
+        }
+      } else {
+        let errorDetail = '';
+        try {
+          const body = await res.json();
+          errorDetail = body.message || body.error || JSON.stringify(body);
+        } catch {
+          errorDetail = await res.text();
+        }
+        throw new Error(`HTTP ${res.status}: ${errorDetail}`);
+      }
+
+    } catch (err) {
+      feedback.className   = 'feedback error';
+      feedback.textContent = '✗ Error al enviar: ' + err.message;
+    } finally {
+      btn.disabled           = false;
+      spin.style.display     = 'none';
+      btnText.textContent    = btnLabel;
+      feedback.style.display = 'block';
+    }
+  }
+
+  /* ══════════════════════════════════
+     Formulario 1 – Recepción
+     ══════════════════════════════════ */
+  document.getElementById('form-recepcion').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
+
+    const qty   = parseFloat(document.getElementById('r-quantity').value);
+    const price = parseFloat(document.getElementById('r-unit-price').value);
+
+    await submitForm({
+      url:       N8N_RECEPCION_URL,
+      formId:    'form-recepcion',
+      btnId:     'btn-recepcion',
+      spinId:    'spin-recepcion',
+      btnTextId: 'btn-recepcion-text',
+      feedbackId:'fb-recepcion',
+      btnLabel:  'Registrar Recepción',
+      payload: {
+        timestamp:         new Date().toISOString(),
+        product_id:        document.getElementById('r-product-id').value.trim(),
+        material_name:     document.getElementById('r-material-name').value.trim(),
+        supplier_name:     document.getElementById('r-supplier').value.trim(),
+        received_by:       document.getElementById('r-received-by').value.trim(),
+        quantity_received: qty,
+        measurement_unit:  document.getElementById('r-unit').value,
+        unit_price:        price,
+        total_price:       (qty * price).toFixed(2),
+        date_of_delivery:  document.getElementById('r-delivery-date').value,
+        description:       document.getElementById('r-description').value.trim(),
+        submissionId:      uuid()
+      }
+    });
+  });
+
+  /* ══════════════════════════════════
+     Formulario 2 – Solicitud de Despacho
+     ══════════════════════════════════ */
+  document.getElementById('form-solicitud').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
+    if (!validateQuantity()) return; // bloquear si stock insuficiente
+
+    await submitForm({
+      url:       N8N_SOLICITUD_URL,
+      formId:    'form-solicitud',
+      btnId:     'btn-solicitud',
+      spinId:    'spin-solicitud',
+      btnTextId: 'btn-solicitud-text',
+      feedbackId:'fb-solicitud',
+      btnLabel:  'Enviar Solicitud',
+      payload: {
+        'Product ID':         document.getElementById('s-product-id').value.trim(),
+        'Quantity Requested': parseFloat(document.getElementById('s-quantity').value),
+        'Requested By':       document.getElementById('s-requested-by').value.trim(),
+        'Requester Email':    document.getElementById('s-requester-email').value.trim(),
+        'Measurement Unit':   document.getElementById('s-unit').value,
+        'Description':        document.getElementById('s-description').value.trim(),
+        'Submission ID':      uuid()
+      }
+    });
+
+    // Recargar productos para que el stock se actualice tras enviar
+    loadProducts();
+  });
+</script>
+
+</body>
+</html>
