@@ -185,6 +185,22 @@
     }
     .qty-error.visible { display: block; }
 
+    /* ── Contador de caracteres ── */
+    .char-counter {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 3px;
+      min-height: 18px;
+    }
+    .char-counter.near-limit { color: var(--warning); font-weight: 600; }
+    .char-counter.at-limit   { color: var(--error);   font-weight: 600; }
+
+    /* ── Priority badge ── */
+    .priority-select option[value="alta"]   { color: var(--error); }
+    .priority-select option[value="media"]  { color: var(--warning); }
+    .priority-select option[value="baja"]   { color: var(--success); }
+
     /* ── Responsive ── */
     @media (max-width: 520px) {
       .form-grid { grid-template-columns: 1fr; }
@@ -264,6 +280,7 @@
   // ⚙️ URLs de webhooks n8n
   const N8N_RECEPCION_URL = "https://aphyllo.app.n8n.cloud/webhook/Pb-raw-materials";
   const N8N_SOLICITUD_URL = "https://aphyllo.app.n8n.cloud/webhook/raw-materials-issue";
+  const N8N_COMPRAS_URL   = "https://aphyllo.app.n8n.cloud/webhook/pending-purchases";
 
   // ⚙️ Supabase (para cargar lista de productos en el formulario de Solicitud)
   const SUPABASE_URL      = "https://clkagukmqejllwxlivrv.supabase.co";
@@ -311,6 +328,7 @@
 <div class="tabs">
   <button class="tab-btn active" onclick="showTab('recepcion', this)">📦 Recepción de Material</button>
   <button class="tab-btn"        onclick="showTab('solicitud', this)">📋 Solicitud de Despacho</button>
+  <button class="tab-btn"        onclick="showTab('compras', this)">🛒 Pendientes de Compra</button>
 </div>
 
 <main>
@@ -464,6 +482,78 @@
       </form>
 
       <div class="feedback" id="fb-solicitud"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       FORMULARIO 3: Pendientes de Compra
+       ═══════════════════════════════════════ -->
+  <div id="tab-compras" class="tab-panel">
+    <div class="card">
+      <h2>Pendientes de Compra</h2>
+      <p class="subtitle">Registra ítems pendientes de compra con su fecha límite de ejecución.</p>
+
+      <form id="form-compras" novalidate>
+        <div class="form-grid">
+
+          <div class="form-group full">
+            <label for="c-item">Ítem a Comprar <span>*</span></label>
+            <input type="text" id="c-item" placeholder="Ej: Cemento Portland 50kg, Cable eléctrico 2.5mm…" required />
+          </div>
+
+          <div class="form-group">
+            <label for="c-quantity">Cantidad <span>*</span></label>
+            <input type="number" id="c-quantity" placeholder="0" min="0.001" step="any" required />
+          </div>
+
+          <div class="form-group">
+            <label for="c-unit">Unidad de Medida <span>*</span></label>
+            <select id="c-unit" required>
+              <option value="">Seleccionar…</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="mL">mL</option>
+              <option value="m">m</option>
+              <option value="cm">cm</option>
+              <option value="m²">m²</option>
+              <option value="unidad">unidad</option>
+              <option value="caja">caja</option>
+              <option value="rollo">rollo</option>
+              <option value="bolsa">bolsa</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="c-deadline">Fecha Límite de Ejecución <span>*</span></label>
+            <input type="date" id="c-deadline" required />
+          </div>
+
+          <div class="form-group">
+            <label for="c-priority">Prioridad <span>*</span></label>
+            <select id="c-priority" class="priority-select" required>
+              <option value="">Seleccionar…</option>
+              <option value="alta">🔴 Alta</option>
+              <option value="media">🟡 Media</option>
+              <option value="baja">🟢 Baja</option>
+            </select>
+          </div>
+
+          <div class="form-group full">
+            <label for="c-comments">Comentarios</label>
+            <textarea id="c-comments" placeholder="Observaciones adicionales sobre la compra…" maxlength="250" rows="3"></textarea>
+            <p class="char-counter" id="c-char-counter">0 / 250 caracteres</p>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-compras">
+          <div class="spinner" id="spin-compras"></div>
+          <span id="btn-compras-text">Registrar Pendiente</span>
+        </button>
+      </form>
+
+      <div class="feedback" id="fb-compras"></div>
     </div>
   </div>
 
@@ -811,6 +901,49 @@
 
     // Recargar productos para que el stock se actualice tras enviar
     loadProducts();
+  });
+
+  /* ══════════════════════════════════
+     Formulario 3 – Pendientes de Compra
+     ══════════════════════════════════ */
+
+  // Contador de caracteres del campo comentarios
+  document.getElementById('c-comments').addEventListener('input', function () {
+    const len     = this.value.length;
+    const counter = document.getElementById('c-char-counter');
+    counter.textContent = `${len} / 250 caracteres`;
+    counter.className = len >= 250 ? 'char-counter at-limit'
+                      : len >= 200 ? 'char-counter near-limit'
+                      : 'char-counter';
+  });
+
+  document.getElementById('form-compras').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
+
+    await submitForm({
+      url:       N8N_COMPRAS_URL,
+      formId:    'form-compras',
+      btnId:     'btn-compras',
+      spinId:    'spin-compras',
+      btnTextId: 'btn-compras-text',
+      feedbackId:'fb-compras',
+      btnLabel:  'Registrar Pendiente',
+      payload: {
+        timestamp:    new Date().toISOString(),
+        item:         document.getElementById('c-item').value.trim(),
+        quantity:     parseFloat(document.getElementById('c-quantity').value),
+        unit:         document.getElementById('c-unit').value,
+        deadline:     document.getElementById('c-deadline').value,
+        priority:     document.getElementById('c-priority').value,
+        comments:     document.getElementById('c-comments').value.trim(),
+        submissionId: uuid()
+      }
+    });
+
+    // Resetear contador de caracteres
+    document.getElementById('c-char-counter').textContent = '0 / 250 caracteres';
+    document.getElementById('c-char-counter').className   = 'char-counter';
   });
 </script>
 
