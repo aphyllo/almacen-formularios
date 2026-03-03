@@ -789,7 +789,7 @@
   /* ══════════════════════════════════
      Helper genérico de envío
      ══════════════════════════════════ */
-  async function submitForm({ payload, url, btnId, spinId, btnTextId, feedbackId, formId, btnLabel }) {
+  async function submitForm({ payload, url, btnId, spinId, btnTextId, feedbackId, formId, btnLabel, successMsg }) {
     const btn      = document.getElementById(btnId);
     const spin     = document.getElementById(spinId);
     const btnText  = document.getElementById(btnTextId);
@@ -808,8 +808,15 @@
       });
 
       if (res.ok) {
+        // Intentar leer la respuesta JSON de n8n para mostrar mensaje dinámico
+        let msg = successMsg || '✓ Registro enviado correctamente';
+        try {
+          const body = await res.json();
+          if (body && body.message) msg = body.message;
+        } catch { /* si no es JSON, usar el mensaje por defecto */ }
+
         feedback.className   = 'feedback success';
-        feedback.textContent = '✓ Enviado correctamente. El flujo de n8n fue activado.';
+        feedback.textContent = msg;
         document.getElementById(formId).reset();
         document.getElementById('s-stock-info').textContent = '';
         if (formId === 'form-recepcion') {
@@ -848,13 +855,14 @@
     const price = parseFloat(document.getElementById('r-unit-price').value);
 
     await submitForm({
-      url:       N8N_RECEPCION_URL,
-      formId:    'form-recepcion',
-      btnId:     'btn-recepcion',
-      spinId:    'spin-recepcion',
-      btnTextId: 'btn-recepcion-text',
-      feedbackId:'fb-recepcion',
-      btnLabel:  'Registrar Recepción',
+      url:        N8N_RECEPCION_URL,
+      formId:     'form-recepcion',
+      btnId:      'btn-recepcion',
+      spinId:     'spin-recepcion',
+      btnTextId:  'btn-recepcion-text',
+      feedbackId: 'fb-recepcion',
+      btnLabel:   'Registrar Recepción',
+      successMsg: '✓ Material registrado exitosamente en el sistema',
       payload: {
         timestamp:         new Date().toISOString(),
         product_id:        document.getElementById('r-product-id').value.trim(),
@@ -881,13 +889,14 @@
     if (!validateQuantity()) return; // bloquear si stock insuficiente
 
     await submitForm({
-      url:       N8N_SOLICITUD_URL,
-      formId:    'form-solicitud',
-      btnId:     'btn-solicitud',
-      spinId:    'spin-solicitud',
-      btnTextId: 'btn-solicitud-text',
-      feedbackId:'fb-solicitud',
-      btnLabel:  'Enviar Solicitud',
+      url:        N8N_SOLICITUD_URL,
+      formId:     'form-solicitud',
+      btnId:      'btn-solicitud',
+      spinId:     'spin-solicitud',
+      btnTextId:  'btn-solicitud-text',
+      feedbackId: 'fb-solicitud',
+      btnLabel:   'Enviar Solicitud',
+      successMsg: '✓ Solicitud de despacho enviada. Recibirás confirmación por correo',
       payload: {
         'Product ID':         document.getElementById('s-product-id').value.trim(),
         'Quantity Requested': parseFloat(document.getElementById('s-quantity').value),
@@ -922,13 +931,14 @@
     if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
 
     await submitForm({
-      url:       N8N_COMPRAS_URL,
-      formId:    'form-compras',
-      btnId:     'btn-compras',
-      spinId:    'spin-compras',
-      btnTextId: 'btn-compras-text',
-      feedbackId:'fb-compras',
-      btnLabel:  'Registrar Pendiente',
+      url:        N8N_COMPRAS_URL,
+      formId:     'form-compras',
+      btnId:      'btn-compras',
+      spinId:     'spin-compras',
+      btnTextId:  'btn-compras-text',
+      feedbackId: 'fb-compras',
+      btnLabel:   'Registrar Pendiente',
+      successMsg: '✓ Pendiente de compra registrado exitosamente',
       payload: {
         timestamp:    new Date().toISOString(),
         item:         document.getElementById('c-item').value.trim(),
