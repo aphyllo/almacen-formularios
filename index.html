@@ -808,9 +808,14 @@
       });
 
       if (res.ok) {
-        feedback.className   = 'feedback success';
-        feedback.textContent = '✓ Enviado correctamente. El flujo de n8n fue activado.';
-        document.getElementById(formId).reset();
+      let successMsg = '✓ Enviado correctamente. El flujo de n8n fue activado.';
+      try {
+        const body = await res.json();
+        if (body && body.message) successMsg = body.message;
+      } catch {}
+      feedback.className   = 'feedback success';
+      feedback.textContent = successMsg;
+      document.getElementById(formId).reset();
         document.getElementById('s-stock-info').textContent = '';
         if (formId === 'form-recepcion') {
           document.getElementById('r-delivery-date').value = new Date().toISOString().split('T')[0];
